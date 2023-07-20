@@ -14,8 +14,8 @@ void Acceptor::Stop() {
 void Acceptor::AsyncAccept(asio::io_context& io_context) {
     std::shared_ptr<TcpConnection> connection = std::make_shared<TcpConnection>(io_context);
     acceptor_.async_accept(connection->Socket(), 
-        [this, connection](const boost::system::error_code& ec) {
-             OnNewConnectCb_(ec, std::move(connection));
+        [this, conn = connection](const boost::system::error_code& ec) {
+             OnNewConnectCb_(ec, std::move(conn));
         }
     );
 }

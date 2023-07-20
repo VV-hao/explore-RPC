@@ -4,6 +4,7 @@
 #include <explore-rpc/base/callbacks.h>
 #include <explore-rpc/base/buffer.h>
 #include <boost/noncopyable.hpp>
+#include <spdlog/spdlog.h>
 #include <boost/asio.hpp>
 #include <type_traits>
 #include <iostream>
@@ -31,8 +32,15 @@ public:
         , remote_()
         , inputBuf_()
         , timer_(ioService_)
+        , connectTimeout_(0)
+        , sendTimeout_(0)
+        , recvTimeout_(0)
     {
 
+    }
+
+    ~TcpConnection() {
+        spdlog::trace("connection [{0}:{1}] is closed", remote_.address().to_string(), remote_.port());
     }
 
     bool Bind(const tcp::endpoint& ep);
@@ -76,8 +84,11 @@ public:
         recvTimeout_    = receive_timeout;
     }
 
-    tcp::endpoint remote() const
+    tcp::endpoint RemoteAddress() const
     { return remote_; }
+
+    tcp::endpoint LocalAddress() const
+    { return local_; }
     
     void SetConnectCallback(const OnConnectCallback_t& func)    { OnConnectCb_ = func; }
     void SetMessageCallback(const OnMessageCallback_t& func)    { OnMessageCb_ = func; }
@@ -102,11 +113,11 @@ private:
     std::atomic_flag timerLock_ { ATOMIC_FLAG_INIT };
 
     /// @code Object-Based
-    OnConnectCallback_t OnConnectCb_;
-    OnSendCallback_t    OnSendCb_;
-    OnMessageCallback_t OnMessageCb_;
-    OnCloseCallback_t   OnCloseCb_;
-    OnErrorCallback_t   OnErrorCb_;
+    OnConnectCallback_t OnConnectCb_    { nullptr };
+    OnSendCallback_t    OnSendCb_       { nullptr };
+    OnMessageCallback_t OnMessageCb_    { nullptr };
+    OnCloseCallback_t   OnCloseCb_      { nullptr };
+    OnErrorCallback_t   OnErrorCb_      { nullptr };
     /// @endcode
 };
 

@@ -1,4 +1,5 @@
 #include <explore-rpc/base/tcpConnection.h>
+#include <spdlog/spdlog.h>
 
 using namespace explore::base;
 
@@ -9,12 +10,12 @@ bool TcpConnection::Bind(const tcp::endpoint& ep) {
     boost::system::error_code ec;
     socket_.open(boost::asio::ip::tcp::v4(), ec);
     if (ec) {
-        std::cerr << "open failed: " << ec.message() << std::endl;
+        spdlog::error("open failed: {}", ec.message());
         return false;
     }
     socket_.bind(ep, ec);
     if (ec) {
-        std::cerr << "bind failed: " << ec.message() << std::endl;
+        spdlog::error("bing failed: {}", ec.message());
         return false;
     }
     local_ = socket_.local_endpoint();
@@ -65,11 +66,13 @@ void TcpConnection::Close() {
             local_.port() << "], remote[" <<
             remote_.address() << ":" <<
             remote_.port() << "]." << std::endl;
+
+        OnCloseCb_(shared_from_this());
+
         try {
             socket_.close();
-            OnCloseCb_(shared_from_this());
         } catch (const boost::system::system_error& se) {
-            std::cerr << "close failed: " << se.what() << std::endl;
+            spdlog::error("close failed: {}", se.what());
         }
     }
 }
@@ -78,7 +81,7 @@ void TcpConnection::Cancel() {
     system::error_code ec;
     socket_.cancel(ec);
     if (ec) {
-        std::cerr << "cancel failed: " << ec.message() << std::endl;
+        spdlog::error("cancel failed: {}", ec.message());
         Close();
     }
 }
@@ -100,21 +103,21 @@ void TcpConnection::AsyncSend(BufferPtr output_buf) {
     assert(output_buf->ReadableBytes() != 0);
     Expire(sendTimeout_);
     asio::async_write(socket_, asio::buffer(output_buf->peek(), output_buf->ReadableBytes()), 
-        [self = shared_from_this(), output_buf = std::move(output_buf)](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+        [self = shared_from_this(), output_buf](const boost::system::error_code& ec, std::size_t bytes_transferred) {
             self->Cancel(self->sendTimeout_);
             if (ec) {
-                std::cerr << "send failed: " << ec.message() << std::endl;
+                spdlog::error("send failed: {}", ec.message());
                 self->Close();
                 self->OnErrorCb_(self, "send failed");
                 return;
             }
-            std::cout << bytes_transferred << " bytes sent." << std::endl;
+            spdlog::trace("{} bytes sent.", bytes_transferred);
             output_buf->retrieve(bytes_transferred);
             if (!self->OnSendCb_(self)) {
                 self->Close();
                 return;
             }
-            self->AsyncRecv();
+            self->AsyncRecv();  /// WARN
         }
     );
 }
@@ -140,11 +143,11 @@ bool TcpConnection::SyncSend(BufferPtr output_buf) {
     boost::system::error_code ec;
     auto bytes_transferred = asio::write(socket_, asio::buffer(output_buf->peek(), output_buf->ReadableBytes()), ec);
     if (ec) {
-        std::cerr << "send failed: " << ec.message() << std::endl;
+        spdlog::error("send failed: {}", ec.message());
         Close();
         return false;
     }
-    std::cout << bytes_transferred << " bytes sent." << std::endl;
+    spdlog::trace("{} bytes sent.", bytes_transferred);
     output_buf->retrieve(bytes_transferred);
     return true;
 }
@@ -157,13 +160,13 @@ void TcpConnection::AsyncRecv() {
             self->Cancel(self->recvTimeout_);
             if (ec) {
                 if (asio::error::eof != ec) {
-                    std::cerr << "receive failed: " << ec.message() << std::endl;
+                    spdlog::error("receive failed: {}", ec.message());
                 }
                 self->Close();
                 self->OnErrorCb_(self, "receive failed");
                 return;
             }
-            std::cout << bytes_transferred << " bytes received." << std::endl;
+            spdlog::trace("{} bytes received.", bytes_transferred);
             if (!self->OnMessageCb_(self, &self->inputBuf_)) {
                 self->Close();
                 return;
@@ -177,12 +180,12 @@ bool TcpConnection::SyncRecv() {
     auto bytes_transferred = inputBuf_.SyncRecv(socket_, ec);
     if (ec) {
         if (ec != asio::error::eof) {
-            std::cerr << "receive failed: " << ec.message() << std::endl;
+            spdlog::error("receive failed: {}", ec.message());
         }
         Close();
         return false;
     }
-    std::cout << bytes_transferred << " bytes received." << std::endl;
+    spdlog::trace("{} bytes received.", bytes_transferred);
     return true;
 }
 

@@ -13,6 +13,10 @@ using namespace boost;
 class Acceptor;         // forward declaration
 class TcpConnection;    // forward declaration
 
+/// @note use multiple loop:
+/// One main-loop is responsible for accepting and dispatch new connections
+/// other sub-loop is responsible for handle connection event 
+/// e.g: call TcpServer::Run(3) to use one master-loop And three sub-loop
 class TcpServer {
     
     using tcp = asio::ip::tcp;
@@ -53,16 +57,15 @@ private:
     int NextContextId_ {0};
 
     /// @code for behavior of tcp-connection
-    OnConnectCallback_t OnConnectCb_ {nullptr};
-    OnSendCallback_t    OnSendCb_    {nullptr};
-    OnMessageCallback_t OnMessageCb_ {nullptr};
-    OnCloseCallback_t   OnCloseCb_   {nullptr};
-    OnErrorCallback_t   OnErrorCb_   {nullptr};
+    OnConnectCallback_t OnConnectCb_    { nullptr };
+    OnSendCallback_t    OnSendCb_       { nullptr };
+    OnMessageCallback_t OnMessageCb_    { nullptr };
+    OnCloseCallback_t   OnCloseCb_      { nullptr };
+    OnErrorCallback_t   OnErrorCb_      { nullptr };
     /// @endcode
 };
 
 } // namespace base 
 } // namespace explore 
-/// @brief multi-loop and thread pool
 
 #endif // EXPLORE_BASE_TCP_SERVER_H

@@ -1,6 +1,7 @@
 #include <explore-rpc/base/acceptor.h>
 #include <explore-rpc/base/tcpServer.h>
 #include <explore-rpc/base/tcpConnection.h>
+#include <spdlog/spdlog.h>
 
 using namespace explore::base;
 
@@ -24,7 +25,7 @@ void TcpServer::OnNewConnect(const system::error_code& ec,
     const std::shared_ptr<base::TcpConnection>& connection)
 {
     if (ec) {
-        std::cerr << "accept failed: " << ec.message() << std::endl;
+        spdlog::error("accept failed: {}", ec.message());
         return;
     }
 
@@ -35,7 +36,7 @@ void TcpServer::OnNewConnect(const system::error_code& ec,
     connection->SetCloseCallback(OnCloseCb_);
 
     if (connection->StepIntoEstablish()) {
-        std::cout << "new connection from [" << connection->remote() << "] is established" << std::endl;
+        spdlog::info("new connection from [{0}:{1}] is established", connection->RemoteAddress().address().to_string(), connection->RemoteAddress().port());
         connection->AsyncRecv();
     }
 
@@ -48,28 +49,31 @@ void TcpServer::Run(const int work_thread_num) {
         return;
     }
 
-    Contexts_.resize(work_thread_num);
     ThreadPool_.reserve(work_thread_num);
+    Contexts_.reserve(work_thread_num);    
 
     for (int i = 0; i < work_thread_num; i++) {
+        Contexts_.emplace_back(std::make_unique<asio::io_context>());
         ThreadPool_.emplace_back(
             [this, i]() {
             while (running_) {
-                try {
-                    Contexts_[i]->run();
-                } catch(...) {
-                    Contexts_[i]->restart();
-                }
+                // try {
+                //     Contexts_[i]->run();
+                // } catch(...) {
+                //     Contexts_[i]->restart();
+                // }
+                Contexts_[i]->run();
             }
         });
     }
 
     while (running_) {
-        try {
-            IoContext_.run();
-        } catch(...) {
-            IoContext_.restart();
-        }
+        // try {
+        //     IoContext_.run();
+        // } catch(...) {
+        //     IoContext_.restart();
+        // }
+        IoContext_.run();
     }
 }
 

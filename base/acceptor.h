@@ -1,6 +1,7 @@
 #if !defined(EXPLORE_BASE_ACCEPTOR_H)
 #define EXPLORE_BASE_ACCEPTOR_H
 
+#include <spdlog/spdlog.h>
 #include <boost/asio.hpp>
 #include <iostream>
 #include <atomic>
@@ -21,7 +22,7 @@ public:
         , acceptor_(IoContext_, addr, true)
         , listening_(true)
     {
-        std::clog << "start listen at [" << addr << "]" << std::endl;
+        spdlog::info("start listen at [{0}:{1}]", addr.address().to_string(), addr.port());
     }
 
     void Stop();
