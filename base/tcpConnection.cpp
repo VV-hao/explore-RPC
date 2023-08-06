@@ -107,8 +107,7 @@ void TcpConnection::AsyncSend(BufferPtr output_buf) {
             self->Cancel(self->sendTimeout_);
             if (ec) {
                 spdlog::error("send failed: {}", ec.message());
-                self->Close();
-                self->OnErrorCb_(self, "send failed");
+                self->OnErrorCb_(self, "send failed, detail: " + ec.message());
                 return;
             }
             spdlog::trace("{} bytes sent.", bytes_transferred);
@@ -117,7 +116,7 @@ void TcpConnection::AsyncSend(BufferPtr output_buf) {
                 self->Close();
                 return;
             }
-            self->AsyncRecv();  /// WARN
+            self->AsyncRecv();  // continue to receive new msg
         }
     );
 }
@@ -144,7 +143,7 @@ bool TcpConnection::SyncSend(BufferPtr output_buf) {
     auto bytes_transferred = asio::write(socket_, asio::buffer(output_buf->peek(), output_buf->ReadableBytes()), ec);
     if (ec) {
         spdlog::error("send failed: {}", ec.message());
-        Close();
+        OnErrorCb_(shared_from_this(), "send failed, detail: " + ec.message());
         return false;
     }
     spdlog::trace("{} bytes sent.", bytes_transferred);
@@ -159,11 +158,12 @@ void TcpConnection::AsyncRecv() {
         [self = shared_from_this()](const system::error_code& ec, size_t bytes_transferred) {
             self->Cancel(self->recvTimeout_);
             if (ec) {
-                if (asio::error::eof != ec) {
-                    spdlog::error("receive failed: {}", ec.message());
+                if (asio::error::eof == ec) {
+                    self->Close();
+                    return;
                 }
-                self->Close();
-                self->OnErrorCb_(self, "receive failed");
+                spdlog::error("receive failed: {}", ec.message());
+                self->OnErrorCb_(self, ec.message());
                 return;
             }
             spdlog::trace("{} bytes received.", bytes_transferred);
@@ -179,13 +179,19 @@ bool TcpConnection::SyncRecv() {
     system::error_code ec;
     auto bytes_transferred = inputBuf_.SyncRecv(socket_, ec);
     if (ec) {
-        if (ec != asio::error::eof) {
-            spdlog::error("receive failed: {}", ec.message());
+        if (ec == asio::error::eof) {
+            Close();
+            return true;
         }
-        Close();
+        OnErrorCb_(shared_from_this(), ec.message());
+        spdlog::error("receive failed: {}", ec.message());
         return false;
     }
     spdlog::trace("{} bytes received.", bytes_transferred);
+    if (!OnMessageCb_(shared_from_this(), &inputBuf_)) {
+        Close();
+        return true;
+    }
     return true;
 }
 
@@ -197,6 +203,7 @@ void TcpConnection::Expire(const std::chrono::milliseconds& timeout) {
                 return;
             }
             self->Cancel();
+            self->timerLock_.clear();
         });
     }
 }
@@ -207,5 +214,6 @@ void TcpConnection::Cancel(const std::chrono::milliseconds& timeout) {
             return;
         }
         timer_.cancel();
+        timerLock_.clear();
     }
 }

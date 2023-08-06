@@ -2,7 +2,9 @@
 #define EXPLORE_BASE_TCP_SERVER_H
 
 #include <explore-rpc/base/callbacks.h>
+#include <boost/noncopyable.hpp>
 #include <boost/asio.hpp>
+#include <unordered_set>
 #include <vector>
 
 namespace explore {
@@ -17,14 +19,14 @@ class TcpConnection;    // forward declaration
 /// One main-loop is responsible for accepting and dispatch new connections
 /// other sub-loop is responsible for handle connection event 
 /// e.g: call TcpServer::Run(3) to use one master-loop And three sub-loop
-class TcpServer {
+class TcpServer : private boost::noncopyable {
     
     using tcp = asio::ip::tcp;
 
 public:
 
     /// @brief construct a tcpserver and start accept new remote connection
-    explicit TcpServer(const tcp::endpoint& addr);
+    explicit TcpServer(asio::io_context& io_context, const tcp::endpoint& addr);
 
     void Run(const int work_thread_num);
 
@@ -46,11 +48,17 @@ private:
     void OnNewConnect(const system::error_code& ec,
         const std::shared_ptr<base::TcpConnection>& connection);
 
-private:
-    asio::io_context IoContext_;                                // main-io_context
-    std::unique_ptr<base::Acceptor> acceptor_;
+    bool DestroyConnection(const TcpConnectionPtr& conn) {
+        std::size_t ok = connections_.erase(conn);
+        assert(ok == 1);    (void)ok;
+        return OnCloseCb_(conn);
+    }
 
-    // for work threads
+private:
+    asio::io_context& IoContext_;                                // main-io_context
+    std::unique_ptr<base::Acceptor> acceptor_;
+    std::unordered_set<TcpConnectionPtr> connections_;
+    // for work threads[io-thread]
     std::vector<std::unique_ptr<asio::io_context>> Contexts_;   // sub-io_contexts
     std::vector<std::thread> ThreadPool_;
     std::atomic_bool running_ { false };

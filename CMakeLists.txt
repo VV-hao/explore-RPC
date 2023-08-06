@@ -13,7 +13,7 @@ endif(spdlog_FOUND)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/base)
 add_subdirectory(${CMAKE_SOURCE_DIR}/rpc-framework)
-# add_subdirectory(${CMAKE_SOURCE_DIR}/bad-try)
+add_subdirectory(${CMAKE_SOURCE_DIR}/bad-try)
 
 set(BUILD_UNIT_TEST ON)
 if(${BUILD_UNIT_TEST})

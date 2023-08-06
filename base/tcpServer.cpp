@@ -5,9 +5,15 @@
 
 using namespace explore::base;
 
+// helper
+inline std::string ThreadIdToString(const std::thread::id& id) {
+    std::ostringstream oss;
+    oss << id;
+    return oss.str();
+}
 
-TcpServer::TcpServer(const tcp::endpoint& addr)
-    : IoContext_()
+TcpServer::TcpServer(asio::io_context& io_context, const tcp::endpoint& addr)
+    : IoContext_(io_context)
     , ThreadPool_()
     , acceptor_(std::make_unique<base::Acceptor>(IoContext_, addr))
 {
@@ -29,11 +35,12 @@ void TcpServer::OnNewConnect(const system::error_code& ec,
         return;
     }
 
+    connections_.insert(connection);    // add to connection-set
     connection->SetConnectCallback(OnConnectCb_);
     connection->SetMessageCallback(OnMessageCb_);
     connection->SetSendCallback(OnSendCb_);
     connection->SetErrorCallback(OnErrorCb_);
-    connection->SetCloseCallback(OnCloseCb_);
+    connection->SetCloseCallback(std::bind(&TcpServer::DestroyConnection, this, std::placeholders::_1));
 
     if (connection->StepIntoEstablish()) {
         spdlog::info("new connection from [{0}:{1}] is established", connection->RemoteAddress().address().to_string(), connection->RemoteAddress().port());
@@ -54,28 +61,36 @@ void TcpServer::Run(const int work_thread_num) {
 
     for (int i = 0; i < work_thread_num; i++) {
         Contexts_.emplace_back(std::make_unique<asio::io_context>());
-        ThreadPool_.emplace_back(
+        ThreadPool_.emplace_back(   // sub-loop thread main func body
             [this, i]() {
             while (running_) {
-                // try {
-                //     Contexts_[i]->run();
-                // } catch(...) {
-                //     Contexts_[i]->restart();
-                // }
-                Contexts_[i]->run();
+                try {
+                    Contexts_[i]->run();
+                } catch(const std::exception& ec) {
+                    spdlog::critical("in sub-loop thread {0}, boost::asio::io_context::run() throw a exception: {1}", ThreadIdToString(std::this_thread::get_id()), ec.what());
+                    Contexts_[i]->restart();
+                } catch(...) {
+                    spdlog::critical("in sub-loop thread {}, boost::asio::io_context::run() throw a unknow exception", ThreadIdToString(std::this_thread::get_id()));
+                    Contexts_[i]->restart();
+                }
             }
         });
     }
 
     while (running_) {
-        // try {
-        //     IoContext_.run();
-        // } catch(...) {
-        //     IoContext_.restart();
-        // }
-        IoContext_.run();
+        try {
+            IoContext_.run();
+        } catch(const std::exception& ec) {
+            spdlog::critical("in sub-loop thread {0}, boost::asio::io_context::run() throw a exception: {1}", ThreadIdToString(std::this_thread::get_id()), ec.what());
+            IoContext_.restart();
+        } catch(...) {
+            spdlog::critical("in sub-loop thread {}, boost::asio::io_context::run() throw a unknow exception", ThreadIdToString(std::this_thread::get_id()));
+            IoContext_.restart();
+        }
     }
 }
+
+
 
 void TcpServer::Stop() {
     bool expect_val = true;

@@ -55,6 +55,14 @@ public:
     bool SyncConnect(const std::string& host, unsigned short port)
     { return SyncConnect(tcp::endpoint(asio::ip::address::from_string(host), port)); }
 
+    bool SyncConnect(const std::string& addr) {
+        auto pos = addr.find(':');
+        if (pos == std::string::npos) {
+            return false;
+        }
+        return SyncConnect(addr.substr(0, pos), std::stoi(addr.substr(pos+1)));
+    }
+
     void Close();
 
     /// @brief cancel all pending async operation of socket 
@@ -70,6 +78,8 @@ public:
 
     bool SyncRecv();
 
+    void Shutdown()
+    { socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_send); }
 
     boost::asio::io_service& IoService() 
     { return static_cast<asio::io_service&>(socket_.get_executor().context()); }
