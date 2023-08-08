@@ -6,7 +6,6 @@
 
 class exampleServiceImpl : public example::ExampleService {
 public:
-    using example::ExampleService::ExampleService;
 
     virtual void Echo(::google::protobuf::RpcController* controller,
                        const ::example::RequestData* request,

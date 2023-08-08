@@ -90,7 +90,8 @@ void RpcServer::RelpyClient(const base::TcpConnectionPtr& conn, std::shared_ptr<
         msg->AppendInt<uint32_t>(output.size());        // add response size
         msg->append(output.c_str(), output.size());     // add response data
         conn->AsyncSend(msg);
-        conn->Shutdown();
+        /*conn->Shutdown();*/   // BUG: can`t be called immediately after AsyncSend()!!!
+                            // FIXME: shoud set SendComplete() callback
     } else {
         // RpcController should set fail to notify a error occur
     }
